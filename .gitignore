@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.env
+.venv
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Streamlit
+.streamlit/secrets.toml
+*.log
+
+# 临时文件和输出文件
+temp_*.md
+temp_*.docx
+*.docx
+
+# 系统/IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Vercel
+.vercel/
+.vercel
