@@ -295,18 +295,8 @@ class MarkdownToDocxConverter:
             p = self.doc.paragraphs[-1]._element
             p.getparent().remove(p)
         
-        # Post-process: Add first-line indent to body paragraphs only (excluding headings, lists, etc.)
-        # doc.paragraphs only includes paragraphs in the main document body, NOT in tables
-        for paragraph in self.doc.paragraphs:
-            style_name = paragraph.style.name if paragraph.style else ""
-            
-            # Broader exclusion: headings, lists, table of contents, headers/footers, etc.
-            exclude_keywords = ['Heading', '标题', 'List', 'Bullet', 'Number', 'Toc', 'Title', 'Header', 'Footer']
-            if any(keyword.lower() in style_name.lower() for keyword in exclude_keywords):
-                continue
-                
-            # Add 2-character indent (approximately 21pt for Chinese characters)
-            paragraph.paragraph_format.first_line_indent = Pt(21)
+        # Post-processing loop removed: Indentation is now handled element-wise
+
         
         # Save the document
         self.doc.save(output_file)
@@ -431,14 +421,31 @@ class MarkdownToDocxConverter:
 
     def _add_heading(self, text, level):
         """Add a heading with the corresponding Word style from the template."""
+        
+        # Treatment for H5 and H6: Use Body Text (Normal) style
+        if level >= 5:
+            # Create a regular paragraph
+            p = self.doc.add_paragraph()
+            # Add text run
+            run = p.add_run(text)
+            
+            # Apply normal paragraph style
+            self._apply_style(run, self.styles['paragraph'])
+            
+            # Ensure it uses the default paragraph style of the document (Normal/正文)
+            # We explicitly don't assign "Heading X" style here
+            
+            # Explicitly remove indentation for H5/H6 paragraphs to differentiate from body text
+            p.paragraph_format.first_line_indent = Pt(0)
+            
+            return p
+
         # Map Markdown heading levels to Word template styles
         template_style_map = {
             1: "标题 1",   # h1 -> Word template "标题 1" style
             2: "标题 2",   # h2 -> Word template "标题 2" style
             3: "标题 3",   # h3 -> Word template "标题 3" style
             4: "标题 4",   # h4 -> Word template "标题 4" style
-            5: "标题 5",   # h5 -> Word template "标题 5" style
-            6: "标题 6"    # h6 -> Word template "标题 6" style
         }
         
         # Map Markdown heading levels to Word built-in styles (fallback)
@@ -447,12 +454,10 @@ class MarkdownToDocxConverter:
             2: "Heading 2",   # h2 -> Word "Heading 2" style
             3: "Heading 3",   # h3 -> Word "Heading 3" style
             4: "Heading 4",   # h4 -> Word "Heading 4" style
-            5: "Heading 5",   # h5 -> Word "Heading 5" style
-            6: "Heading 6"    # h6 -> Word "Heading 6" style
         }
         
         # Try to use template style if available, otherwise use built-in style
-        word_style = template_style_map.get(level, "标题 6")
+        word_style = template_style_map.get(level, f"标题 {level}")
         
         # Add paragraph and apply style
         paragraph = self.doc.add_paragraph(text)
@@ -462,8 +467,12 @@ class MarkdownToDocxConverter:
             paragraph.style = word_style
         except Exception:
             # Fallback to built-in style if template style not found
-            builtin_style = builtin_style_map.get(level, "Heading 6")
-            paragraph.style = builtin_style
+            builtin_style = builtin_style_map.get(level, f"Heading {level}")
+            try:
+                paragraph.style = builtin_style
+            except:
+                # If even builtin fails, fall back to Normal
+                paragraph.style = "Normal"
         
         # Only apply custom styles if template is not loaded (template styles should take precedence)
         if not self.template_loaded:
@@ -503,6 +512,9 @@ class MarkdownToDocxConverter:
                 # Apply text indent from context
                 if 'text_indent' in context:
                     p.paragraph_format.first_line_indent = context['text_indent']
+                else:
+                    # Default indentation for body text (2 chars / ~21pt)
+                    p.paragraph_format.first_line_indent = Pt(21)
             return
 
         if element.name is None:
@@ -591,6 +603,9 @@ class MarkdownToDocxConverter:
                             # Set text indent if specified in context
                             if 'text_indent' in current_context:
                                 p.paragraph_format.first_line_indent = current_context['text_indent']
+                            else:
+                                # Default indentation for body text
+                                p.paragraph_format.first_line_indent = Pt(21)
                             
                             # Set reduced space after for list items
                             if re.search(r'^\(\d+\)\s+', item_html):
@@ -616,6 +631,9 @@ class MarkdownToDocxConverter:
                     # Set text indent if specified in context
                     if 'text_indent' in current_context:
                         p.paragraph_format.first_line_indent = current_context['text_indent']
+                    else:
+                        # Default indentation for body text
+                        p.paragraph_format.first_line_indent = Pt(21)
                     
                     # Check if it's a custom list item
                     if re.search(r'^\(\d+\)\s+', element.text.strip()):
